@@ -3,6 +3,7 @@ import {createTurboWarpBroadcastPort} from '@kubohiroya/turbowarp-runtime-adapte
 import {createDsl4RuntimeController} from 'guide-test-app-controller';
 declare const __GUIDE_STORY__: Record<string, unknown>;
 const vm = (window as any).vm;
+let completions = 0;
 const broadcast = createTurboWarpBroadcastPort({runtime: vm.runtime});
 const next = document.createElement('a');
 next.textContent = '次の教材へ';
@@ -18,10 +19,12 @@ const controller = createDsl4RuntimeController({
     port: {
         broadcastMessageAndWait: (payload: {message: string}, context: {signal: AbortSignal}) =>
             broadcast.broadcastMessageAndWait(payload, context),
-        wait: async () => {if (vm.runtime.getTargetForStage().variables.result.value === 'completed') next.hidden = false;}
+        wait: async () => {
+            if (vm.runtime.getTargetForStage().variables.result.value === 'completed') {completions++; next.hidden = false;}
+        }
     }
 });
-Object.assign(window, {guideLesson: {controller, broadcast, next, start: () => {
+Object.assign(window, {guideLesson: {controller, broadcast, next, get completions() {return completions;}, start: () => {
     next.hidden = true;
     vm.runtime.getTargetForStage().variables.result.value = 'idle';
     return controller.start();

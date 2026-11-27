@@ -37,7 +37,7 @@
     "test": "node --test test/*.test.ts",
     "build": "node scripts/build.mjs && tsc -p tsconfig.build.json",
     "test:browser": "node --test test/*.browser.ts",
-    "test:editor": "node --test test/editor.integration.ts",
+    "test:editor": "node --test test/*.integration.ts",
     "test:distribution": "node --test test/distribution.check.ts",
     "prepack": "npm run build"
   },
