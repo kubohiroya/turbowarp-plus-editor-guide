@@ -6,7 +6,7 @@ Issue: https://github.com/kubohiroya/turbowarp-plus-editor/issues/724
 
 Joyride 3.2.0と共有React 16.14を使用します。GUIの内部モジュールやCSSはimportしません。起動だけでは案内を表示せず、作品の明示的な呼出しで表示します。
 
-未公開のローカル実装です。通常の保存・Undo・基本ブロックは制限しません。能力マスク、課題の編集制限、教員管理は後続の別タスクです。
+通常の保存・Undo・基本ブロックは制限しません。能力マスク、課題の編集制限、教員管理は後続の別タスクです。
 
 ## 検証と切り戻し
 
@@ -61,4 +61,4 @@ Joyride 3.2.0と共有React 16.14を使用します。GUIの内部モジュー�
 
 Gitやデバッガへのタブ切替をまたいで案内を維持する教材では、`project.search` 等の表示が残る対象を選びます。対象自体が非表示・消滅した場合は、APIの契約どおり `unavailable` で待機を終了します。
 
-Editorの基点はmain `61c2388b0a8fd4e4a03054010fdbf36918ae23d9`、GUI `60b87e2f2503206847f509285aa4de3cee3670c7`、VM `88a2c06e9deb3dd652c52c20daf4f728b387d41d`。未公開候補はローカルpreviewとして検証し、npm限定の正式配布検査を迂回して公開しません。
+初期の統合検証はEditor main `61c2388b0a8fd4e4a03054010fdbf36918ae23d9`、GUI `60b87e2f2503206847f509285aa4de3cee3670c7`、VM `88a2c06e9deb3dd652c52c20daf4f728b387d41d` を基点に実施しました。開発中の未公開候補はローカルpreviewとして検証し、npm限定の正式配布検査を迂回して公開しません。
