@@ -8,8 +8,8 @@ export interface GuideTarget {
     resolve(): Element | readonly Element[] | null;
     events?: readonly string[];
 }
-export interface GuideSnapshot {generation: number; targetId: string; element: HTMLElement; message: string; waiting: boolean}
-export interface WaitOptions {signal?: AbortSignal; timeoutMs?: number}
+export interface GuideSnapshot {generation: number; targetId: string; element: HTMLElement; message: string; waiting: boolean; presentation: boolean}
+export interface WaitOptions {signal?: AbortSignal; timeoutMs?: number; presentation?: boolean}
 interface Session {snapshot: GuideSnapshot; action?: GuideAction; settle?: (result: GuideResult) => void; cleanup: Array<() => void>}
 const validId = (value: unknown): value is string => typeof value === 'string' && /^[a-z][a-zA-Z0-9.-]{0,127}$/.test(value);
 
@@ -62,6 +62,9 @@ export class Guide {
                 reason: 'reason' in resolved ? resolved.reason : ''};
         });
     }
+    resolveTarget(id: string): {element: HTMLElement} | {reason: string} {
+        return this.disposed ? {reason: 'disposed'} : this.resolve(id);
+    }
     snapshot = (): GuideSnapshot | null => this.session?.snapshot || null;
     lastResult = (): GuideResult | null => this.result;
     subscribe = (listener: () => void): (() => void) => {this.listeners.add(listener); return () => {this.listeners.delete(listener);};};
@@ -93,7 +96,7 @@ export class Guide {
     private present(id: string, message: string, element: HTMLElement, action?: GuideAction,
         settle?: (result: GuideResult) => void, options: WaitOptions = {}) {
         const session: Session = {snapshot: {generation: ++this.generation, targetId: id, element, message,
-            waiting: Boolean(action)}, action, settle, cleanup: []};
+            waiting: Boolean(action), presentation: options.presentation !== false}, action, settle, cleanup: []};
         this.session = session;
         const observer = new this.document.defaultView!.MutationObserver(() => {
             if (this.session !== session) return;

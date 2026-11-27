@@ -4,12 +4,13 @@ import ReactDOM from 'react-dom';
 import {Joyride, type EventData} from 'react-joyride';
 import {Guide, type GuideTarget} from './core.js';
 import {createGuideExtensionClass, GUIDE_EXTENSION_ID} from './extension.js';
+import {GuideSprites, type SpriteRuntimePort} from './sprites.js';
 export interface EventPort {on?(event: string, listener: (...args: unknown[]) => void): unknown;
     isActiveThread?(thread: unknown): boolean;
     off?(event: string, listener: (...args: unknown[]) => void): unknown;
     removeListener?(event: string, listener: (...args: unknown[]) => void): unknown}
 export interface GuideVm extends EventPort {
-    runtime?: EventPort;
+    runtime?: EventPort & SpriteRuntimePort;
     extensionManager?: {
         addBuiltinExtension(id: string, extension: ReturnType<typeof createGuideExtensionClass>): void;
         isExtensionLoaded(id: string): boolean;
@@ -27,16 +28,17 @@ export interface EditorGuideOptions {
     getBlockly?: () => Promise<{getMainWorkspace?(): WorkspacePort}>;
     onError?: (error: unknown) => void;
 }
-interface Bridge {guide: Guide | null; locale: string}
+interface Bridge {guide: Guide | null; sprites: GuideSprites | null; locale: string}
 const bridges = new WeakMap<object, Bridge>();
 function bridgeFor(vm: GuideVm): Bridge | null {
     const manager = vm.extensionManager;
     if (!manager?.addBuiltinExtension) return null;
     let bridge = bridges.get(vm);
     if (!bridge) {
-        bridge = {guide: null, locale: 'en'};
+        bridge = {guide: null, sprites: null, locale: 'en'};
         const owned = bridge;
-        manager.addBuiltinExtension(GUIDE_EXTENSION_ID, createGuideExtensionClass(() => owned.guide, () => owned.locale, () => vm.runtime));
+        manager.addBuiltinExtension(GUIDE_EXTENSION_ID, createGuideExtensionClass(() => owned.guide, () => owned.locale,
+            () => vm.runtime, () => owned.sprites));
         bridges.set(vm, bridge);
     }
     return bridge;
@@ -59,7 +61,7 @@ export function GuideView({guide, locale = 'en'}: {guide: Guide; locale?: string
             if (element.style.outlineOffset === '-3px') element.style.outlineOffset = previousOffset;
         };
     }, [snapshot?.generation]);
-    if (!snapshot) return null;
+    if (!snapshot || !snapshot.presentation) return null;
     const ja = locale.startsWith('ja');
     const bounds = snapshot.element.getBoundingClientRect();
     const view = guide.document.defaultView!;
@@ -100,7 +102,8 @@ export function attachEditorGuide({vm, document, locale = 'en', targets, getBloc
     const bridge = bridgeFor(vm)!;
     if (bridge.guide) throw new Error('Guide is already attached to this VM');
     const guide = new Guide(document);
-    bridge.guide = guide; bridge.locale = locale;
+    const sprites = new GuideSprites(guide, vm.runtime || {});
+    bridge.guide = guide; bridge.sprites = sprites; bridge.locale = locale;
     const container = document.createElement('div');
     container.dataset.twEditorGuide = 'true';
     document.body.appendChild(container);
@@ -111,28 +114,36 @@ export function attachEditorGuide({vm, document, locale = 'en', targets, getBloc
         for (const target of targets || editorTargets(document, () => workspace)) disposals.push(guide.register(target));
         ReactDOM.render(<GuideView guide={guide} locale={locale} />, container);
     } catch (error) {
-        guide.dispose();
+        guide.dispose(); sprites.dispose();
         for (const cleanup of disposals.reverse()) cleanup();
         ReactDOM.unmountComponentAtNode(container);
-        container.remove(); bridge.guide = null;
+        container.remove(); bridge.guide = null; bridge.sprites = null;
         throw error;
     }
     for (const port of new Set([vm, vm.runtime])) {
         if (!port?.on || !(port.off || port.removeListener)) continue;
         for (const event of ['PROJECT_STOP_ALL', 'PROJECT_LOADED', 'RUNTIME_DISPOSED']) {
-            const cancel = () => guide.hide(event === 'PROJECT_STOP_ALL' ? 'stopped' : 'project-changed');
+            const cancel = () => {
+                const reason = event === 'PROJECT_STOP_ALL' ? 'stopped' : 'project-changed';
+                guide.hide(reason); sprites.hideAll(reason);
+            };
             port.on(event, cancel);
             disposals.push(() => (port.off || port.removeListener)?.call(port, event, cancel));
         }
     }
+    const runtime = vm.runtime;
+    if (runtime?.on && (runtime.off || runtime.removeListener)) {
+        runtime.on('AFTER_EXECUTE', sprites.afterExecute);
+        disposals.push(() => (runtime.off || runtime.removeListener)!.call(runtime, 'AFTER_EXECUTE', sprites.afterExecute));
+    }
     const dispose = () => {
         if (disposed) return;
         disposed = true;
-        guide.dispose();
+        guide.dispose(); sprites.dispose();
         for (const cleanup of disposals.splice(0).reverse()) cleanup();
         ReactDOM.unmountComponentAtNode(container);
         container.remove();
-        if (bridge!.guide === guide) bridge!.guide = null;
+        if (bridge!.guide === guide) {bridge!.guide = null; bridge!.sprites = null;}
     };
     const ready = (async () => {
         try {
@@ -157,5 +168,5 @@ export function attachEditorGuide({vm, document, locale = 'en', targets, getBloc
             return !disposed;
         } catch (error) {dispose(); onError?.(error); return false;}
     })();
-    return {guide, ready, dispose};
+    return {guide, sprites, ready, dispose};
 }

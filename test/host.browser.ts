@@ -75,3 +75,82 @@ test('real Joyride with shared React 16 waits for operations and cleans up all l
     await page.evaluate(() => (window as any).fixture.attachment.dispose());
     assert.deepEqual(errors, []);
 });
+
+test('a live sprite and speech follow a logical target while the editor remains interactive', async t => {
+    const bundle = await build({entryPoints: ['test/browser-fixture.ts'], bundle: true, write: false,
+        platform: 'browser', target: 'es2017', define: {'process.env.NODE_ENV': '"production"'}});
+    const browser = await chromium.launch({headless: true}); t.after(() => browser.close());
+    const page = await browser.newPage({viewport: {width: 1000, height: 700}});
+    await page.setContent(html + '<input aria-label="Practice"><button id="save">Save</button>');
+    await page.addScriptTag({content: bundle.outputFiles[0]!.text});
+    assert.equal(await page.evaluate(() => (window as any).fixture.attachment.ready), true);
+    await page.evaluate(() => {
+        const f = (window as any).fixture; (window as any).outcome = '';
+        (window as any).clicks = 0;
+        document.querySelector('#workspace')!.addEventListener('click', () => {(window as any).clicks++;});
+        f.extension.spriteAndWait({TARGET: 'code.workspace', SIDE: 'center', MESSAGE: '<b>コードを直してね</b>',
+            ACTION: 'event:workspace.changed'}, {target: f.actor, thread: {}}).then((s: string) => {(window as any).outcome = s;});
+    });
+    const actor = page.locator('[data-tw-guide-sprite]');
+    const speech = page.locator('[data-tw-guide-speech]');
+    await actor.waitFor({state: 'visible'});
+    assert.equal(await speech.textContent(), '<b>コードを直してね</b>');
+    assert.equal(await speech.locator('b').count(), 0);
+    assert.equal(await page.locator('#joyride-tooltip-content').count(), 0);
+    assert.deepEqual(await actor.evaluate((e: HTMLCanvasElement) => [...e.getContext('2d')!.getImageData(0, 0, 1, 1).data]), [255, 0, 0, 255]);
+    const initial = await actor.boundingBox(); assert.ok(initial && initial.x > 480);
+    assert.equal(await page.evaluate(() => (window as any).fixture.nativeVisible), false);
+    assert.equal(await page.evaluate(() => (window as any).fixture.actor.visible), true);
+    await page.mouse.click(initial.x + initial.width / 2, initial.y + initial.height / 2);
+    assert.equal(await page.evaluate(() => (window as any).clicks), 1);
+    await page.getByRole('textbox', {name: 'Practice'}).fill('edited while the guide runs');
+    assert.equal(await page.evaluate(() => (window as any).outcome), '');
+    await page.evaluate(() => {
+        const f = (window as any).fixture;
+        f.actor.currentCostume = 1; f.actor.effects.ghost = 50; f.actor.x += 30;
+        (document.querySelector('#workspace') as HTMLElement).style.left = '500px';
+        f.emit('AFTER_EXECUTE');
+    });
+    assert.deepEqual(await actor.evaluate((e: HTMLCanvasElement) => [...e.getContext('2d')!.getImageData(0, 0, 1, 1).data]), [0, 0, 255, 255]);
+    assert.equal(await actor.evaluate(e => getComputedStyle(e).opacity), '0.5');
+    assert.equal((await actor.boundingBox())!.x, initial.x + 10);
+    await page.evaluate(() => (window as any).fixture.changeWorkspace());
+    await page.waitForFunction(() => (window as any).outcome === 'completed');
+    assert.equal(await actor.count(), 0); assert.equal(await speech.count(), 0);
+    assert.equal(await page.evaluate(() => (window as any).fixture.nativeVisible), true);
+    for (const event of ['PROJECT_STOP_ALL', 'PROJECT_LOADED']) {
+        await page.evaluate(() => {
+            const f = (window as any).fixture; (window as any).outcome = '';
+            f.extension.spriteAndWait({TARGET: 'code.workspace', MESSAGE: '待っています', ACTION: 'click'}, {target: f.actor})
+                .then((s: string) => {(window as any).outcome = s;});
+        });
+        await actor.waitFor({state: 'visible'});
+        await page.evaluate(event => (window as any).fixture.emit(event), event);
+        await page.waitForFunction(() => (window as any).outcome === 'cancelled');
+        assert.equal(await actor.count(), 0);
+    }
+    assert.equal(await page.evaluate(() => {
+        const f = (window as any).fixture;
+        return f.extension.spriteAndWait({TARGET: 'unknown', MESSAGE: '案内', ACTION: 'click'}, {target: f.actor});
+    }), 'unavailable');
+    assert.equal(await page.evaluate(() => {
+        const f = (window as any).fixture;
+        return f.extension.spriteAndWait({TARGET: 'code.workspace', MESSAGE: '案内', ACTION: 'click'},
+            {target: {...f.actor, isStage: true}});
+    }), 'unavailable');
+    assert.equal(await actor.count(), 0);
+    await page.evaluate(() => {
+        const f = (window as any).fixture; (window as any).outcome = '';
+        f.extension.spriteAndWait({TARGET: 'code.workspace', MESSAGE: '待っています', ACTION: 'click'}, {target: f.actor})
+            .then((s: string) => {(window as any).outcome = s;});
+    });
+    await actor.waitFor({state: 'visible'});
+    await page.evaluate(() => {const f = (window as any).fixture; f.actor.visible = false; f.emit('AFTER_EXECUTE');});
+    await actor.waitFor({state: 'hidden'});
+    await page.evaluate(() => (window as any).fixture.extension.hide());
+    await page.waitForFunction(() => (window as any).outcome === 'cancelled');
+    assert.equal(await page.evaluate(() => (window as any).fixture.nativeVisible), false);
+    assert.equal(await speech.count(), 0);
+    await page.evaluate(() => (window as any).fixture.attachment.dispose());
+    assert.equal(await page.evaluate(() => (window as any).fixture.listenerCount), 0);
+});
