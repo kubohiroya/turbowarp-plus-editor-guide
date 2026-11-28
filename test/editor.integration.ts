@@ -79,7 +79,7 @@ test('a paper-story sprite speaks outside the Stage while real Editor editing an
         const pixel = e?.getContext('2d')?.getImageData(e.width / 2, e.height * 0.8, 1, 1).data;
         return pixel && pixel[2] > 180 && parseFloat(e.style.width) < 70;
     });
-    await page.locator('.blocklySvg').filter({visible: true}).first().click({position: {x: 240, y: 160}});
+    await page.locator('.blocklySvg').filter({visible: true}).first().click({position: {x: 600, y: 160}});
     await page.getByRole('link', {name: '次の教材へ'}).waitFor();
     assert.equal(await page.evaluate(() => (window as any).vm.runtime.getTargetForStage().variables.result.value), 'completed');
     const next = new URL(await page.getByRole('link', {name: '次の教材へ'}).getAttribute('href') as string);
@@ -95,7 +95,7 @@ test('a paper-story sprite speaks outside the Stage while real Editor editing an
     await page.waitForFunction(value => (window as any).vm.runtime.getTargetForStage().variables.clock.value > value, afterCancel);
     await page.evaluate(() => {void (window as any).guideLesson.start();});
     await sprite.waitFor({state: 'visible'});
-    await page.locator('.blocklySvg').filter({visible: true}).first().click({position: {x: 240, y: 160}});
+    await page.locator('.blocklySvg').filter({visible: true}).first().click({position: {x: 600, y: 160}});
     await page.getByRole('link', {name: '次の教材へ'}).click();
     await page.waitForFunction(() => (window as any).vm?.runtime?.getTargetForStage()?.variables.chapter?.value === 2);
     assert.equal(new URL(page.url()).searchParams.get('twPlusWorkspaceMinimap'), '1');

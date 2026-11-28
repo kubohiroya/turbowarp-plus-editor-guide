@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MPL-2.0
 import type {Guide} from './core.js';
 import type {GuideSprites, SpriteSide, SpriteTargetPort} from './sprites.js';
+import type {NextLessonButton, NextLessonResult} from './next.js';
 export const GUIDE_EXTENSION_ID = 'kubohiroyaeditorguide';
-type Arguments = {TARGET?: unknown; MESSAGE?: unknown; ACTION?: unknown; SIDE?: unknown};
+type Arguments = {TARGET?: unknown; MESSAGE?: unknown; ACTION?: unknown; SIDE?: unknown; PROJECT?: unknown; FEATURES?: unknown; LABEL?: unknown};
 type Util = {thread?: unknown; target?: SpriteTargetPort};
 export interface GuideThreadPort {
     on?(event: string, listener: () => void): unknown;
@@ -11,7 +12,8 @@ export interface GuideThreadPort {
     isActiveThread?(thread: unknown): boolean;
 }
 export function createGuideExtensionClass(getGuide: () => Guide | null, getLocale: () => string = () => 'en',
-    getRuntime: () => GuideThreadPort | undefined = () => undefined, getSprites: () => GuideSprites | null = () => null) {
+    getRuntime: () => GuideThreadPort | undefined = () => undefined, getSprites: () => GuideSprites | null = () => null, getNext: () => NextLessonButton | null = () => null) {
+    let next: NextLessonResult = {status: 'unavailable', reason: 'not-requested'};
     return class GuideExtension {
         getInfo() {
             const ja = getLocale().startsWith('ja');
@@ -35,6 +37,13 @@ export function createGuideExtensionClass(getGuide: () => Guide | null, getLocal
                     {opcode: 'hide', blockType: 'command', text: ja ? 'エディター案内を閉じる' : 'hide editor guide'},
                     {opcode: 'result', blockType: 'reporter', text: ja ? '案内の結果' : 'guide result'},
                     {opcode: 'reason', blockType: 'reporter', text: ja ? '案内の結果の理由' : 'guide result reason'},
+                    {opcode: 'offerNext', blockType: 'command',
+                        text: ja ? '次の教材 [PROJECT] へのボタン [LABEL] を出す（追加機能 [FEATURES]）' :
+                            'offer button [LABEL] to next lesson [PROJECT] (add features [FEATURES])',
+                        arguments: {PROJECT: {type: 'string', defaultValue: 'https://example.org/next.sb3'},
+                            LABEL: {type: 'string', defaultValue: ja ? '次の教材へ' : 'Next lesson'},
+                            FEATURES: {type: 'string', defaultValue: ''}}},
+                    {opcode: 'nextStatus', blockType: 'reporter', text: ja ? '次の教材ボタンの状態' : 'next lesson button status'},
                     {opcode: 'available', blockType: 'Boolean', text: ja ? '[TARGET] を案内できる' : 'can guide [TARGET]',
                         arguments: {TARGET: {type: 'string', menu: 'targets', defaultValue: 'editor.greenFlag'}}}
                 ], menus: {targets: {acceptReporters: true, items: 'getTargets'}, sides: {acceptReporters: true,
@@ -81,7 +90,13 @@ export function createGuideExtensionClass(getGuide: () => Guide | null, getLocal
         }
         showAndWait(args: Arguments, util?: Util) {return this.wait(args, util);}
         spriteAndWait(args: Arguments, util?: Util) {return this.wait(args, util, true);}
-        hide() {getGuide()?.hide();}
+        hide() {getGuide()?.hide(); getNext()?.hide();}
+        offerNext(args: Arguments) {
+            const button = getNext();
+            next = button ? button.show({projectUrl: String(args.PROJECT ?? ''), features: String(args.FEATURES ?? ''),
+                label: String(args.LABEL ?? ''), locale: getLocale()}) : {status: 'unavailable', reason: 'not-attached'};
+        }
+        nextStatus() {return next.status === 'shown' ? 'shown' : next.reason;}
         result() {return getGuide()?.lastResult()?.status || 'unavailable';}
         reason() {return getGuide()?.lastResult()?.reason || 'not-attached';}
         available(args: Arguments) {return getGuide()?.listTargets().some(target => target.id === String(args.TARGET) && target.available) || false;}
