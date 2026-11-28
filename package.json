@@ -1,6 +1,6 @@
 {
   "name": "@kubohiroya/turbowarp-plus-editor-guide",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Project-driven GUI guides for TurboWarp Plus Editor",
   "type": "module",
   "license": "MPL-2.0",
@@ -16,7 +16,10 @@
     "LICENSE",
     "THIRD_PARTY_NOTICES.txt"
   ],
-  "publishConfig": {"access": "public", "tag": "latest"},
+  "publishConfig": {
+    "access": "public",
+    "tag": "latest"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

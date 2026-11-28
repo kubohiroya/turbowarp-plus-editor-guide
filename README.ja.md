@@ -31,7 +31,7 @@ Joyride 3.2.0と共有React 16.14を使用します。GUIの内部モジュー�
 
 ## Scratchと最小教材
 
-拡張IDは `kubohiroyaeditorguide`。表示、表示して待つ、閉じる、結果、理由、対象を案内できるか、を提供します。待機ブロックのACTIONは `click` または `event:workspace.changed` 等です。作品停止・切替、対象の消滅、呼出し元のScratchスレッドだけの停止、ホスト破棄で待機を解除します。
+拡張IDは `kubohiroyaeditorguide`。表示、表示して待つ、閉じる、結果、理由、対象を案内できるか、次の教材へのボタン、その状態を提供します。待機ブロックのACTIONは `click` または `event:workspace.changed` 等です。作品停止・切替、対象の消滅、呼出し元のScratchスレッドだけの停止、ホスト破棄で待機を解除します。
 
 `このスプライトを [TARGET] の [SIDE] に出し [MESSAGE] と話して [ACTION] を待つ` は、呼出し元のスプライトを論理名の指すUIの隣または中央に表示します。姿・大きさ・向き・効果は実VMのrendererの公開APIから取得し、移動は表示開始時からの相対位置を反映します。セリフはこのGuideブロックのMESSAGEをテキストとして表示します。音声合成や通常の「と言う」ブロックの移設は含みません。複数シーンは既存のbroadcast receiverから順番に呼び、操作完了後に次のシーンへ進めます。
 
@@ -45,9 +45,21 @@ Joyride 3.2.0と共有React 16.14を使用します。GUIの内部モジュー�
 
 デバッガのログ・変数確認等を併用できます。VM全体の一時停止・ステップ実行はガイド役のVM動作にも及びます。全停止や作品読込はGuideを解除します。チェックアウト、pull後の再読込、別作品を開く等、実行対象を置き換える操作で同じ実行の継続は保証しません。既存のフォルダ連携は実行中の外部変更適用を保留します。独立したデバッグ停止やブランチ切替後のシーン再開は別の実行状態管理が必要です。
 
-標準対象は `editor.greenFlag`、`sprite.list`、`project.search`、`code.workspace`。対象が提供・表示されていない場合は `unavailable` です。実操作の完了と学習課題の達成は別です。緑の旗は作品を再開始するため、実行を維持する教材ではworkspace等を案内します。
+標準対象は `editor.greenFlag`、`sprite.list`、`project.search`、`code.find`、`code.workspace`。`code.find` はコードエリア上の「検索 (Ctrl+F)」、`project.search` は標準レイアウトのメニューバーにある作品全体の検索です。対象が提供・表示されていない場合は `unavailable` です。実操作の完了と学習課題の達成は別です。緑の旗は作品を再開始するため、実行を維持する教材ではworkspace等を案内します。
 
-`examples/guide-intro.ts` は、案内を待つreceiverと無関係に動き続ける時計を持つ最小SB3を生成します。紙芝居の既存 `broadcastMessageAndWait` からreceiverを呼び、Guide操作後に物語を再開します。この経路は対応版で `dsl4Runtime` と `dsl4BroadcastMessageAndWait` を明示的に有効にする必要があります。Custom Actionの30秒timeoutを延長して代用しません。次の教材へは作品側の明示的なリンクで進み、既存の起動フラグと言語を指定します。教材用プリセットは未実装です。
+`examples/guide-intro.ts` は、案内を待つreceiverと無関係に動き続ける時計を持つ最小SB3を生成します。紙芝居の既存 `broadcastMessageAndWait` からreceiverを呼び、Guide操作後に物語を再開します。この経路は対応版で `dsl4Runtime` と `dsl4BroadcastMessageAndWait` を明示的に有効にする必要があります。Custom Actionの30秒timeoutを延長して代用しません。教材用プリセットは未実装です。
+
+## 次の教材へのボタン
+
+`次の教材 [PROJECT] へのボタン [LABEL] を出す（追加機能 [FEATURES]）` は、画面右下に「次の教材へ」のリンクを出します。利用者が押したときだけ移動し、作品から自動で移動しません。移動先は今開いているEditorのページで、`project_url` だけを差し替えます。言語と、今のURLにある起動フラグはそのまま引き継ぎます。
+
+- `PROJECT`: 次のSB3。`https:`、Editorと同じオリジン、またはループバックの `http:` だけを受け付けます。相対URLはEditorのページから解決します。認証情報を含むURLは拒否します。
+- `FEATURES`: 追加で有効にする起動フラグ。`twPlusLocalGit twPlusWorkspaceMinimap` のように空白かカンマで区切ります。`twPlus` で始まる名前を `1` にすることだけができ、機能を外す指定（`=0`）は拒否します。
+- `LABEL`: ボタンの文字。テキストとして表示し、40文字までにします。空なら「次の教材へ」です。
+- 作品停止、作品の読込・切替、「エディター案内を閉じる」、ホスト破棄でボタンを消します。
+- `次の教材ボタンの状態` は `shown` または拒否の理由（`insecure-project-url`、`invalid-project-url`、`invalid-feature`、`not-attached` 等）を返します。
+
+URLは起動構成の指定であり、学習の完了や利用権限の証明として扱いません。
 
 ## 検証条件
 

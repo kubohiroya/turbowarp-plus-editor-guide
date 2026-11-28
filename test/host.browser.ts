@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {build} from 'esbuild';
 import {chromium} from '@playwright/test';
-const html = '<!doctype html><html><head><meta charset="utf-8"></head><body><div id="stage" style="width:480px;height:360px;background:#eee">Stage</div><button data-testid="green-flag" style="position:absolute;left:520px;top:60px">Green flag</button><div id="workspace" style="position:absolute;left:520px;top:140px;width:350px;height:300px">Workspace</div></body></html>';
+const html = '<!doctype html><html><head><meta charset="utf-8"></head><body><div id="stage" style="width:480px;height:360px;background:#eee">Stage</div><button data-testid="green-flag" style="position:absolute;left:520px;top:60px">Green flag</button><div id="workspace" style="position:absolute;left:520px;top:140px;width:350px;height:300px">Workspace</div><input class="sa-find-input" aria-label="Find" style="position:absolute;left:520px;top:10px"></body></html>';
 test('real Joyride with shared React 16 waits for operations and cleans up all lifecycle paths', async t => {
     assert.notEqual(process.env.E2E_HEADED, '1'); assert.notEqual(process.env.E2E_NATIVE, '1');
     assert.notEqual(process.env.TW_PLUS_NATIVE_INPUT, '1');
@@ -72,6 +72,15 @@ test('real Joyride with shared React 16 waits for operations and cleans up all l
     assert.equal(await page.evaluate(() => (window as any).fixture.attachment.ready), true);
     assert.equal(await page.evaluate(() => (window as any).fixture.registrations), 1);
     assert.equal(await page.evaluate(() => (window as any).fixture.extension.available({TARGET: 'editor.greenFlag'})), true);
+    assert.equal(await page.evaluate(() => (window as any).fixture.extension.available({TARGET: 'code.find'})), true);
+    await page.evaluate(() => {
+        (window as any).outcome = '';
+        (window as any).fixture.extension.showAndWait({TARGET: 'code.find', MESSAGE: '検索してね', ACTION: 'click'})
+            .then((status: string) => {(window as any).outcome = status;});
+    });
+    await page.getByText('検索してね', {exact: true}).waitFor();
+    await page.getByRole('textbox', {name: 'Find'}).click();
+    await page.waitForFunction(() => (window as any).outcome === 'completed');
     await page.evaluate(() => (window as any).fixture.attachment.dispose());
     assert.deepEqual(errors, []);
 });
@@ -153,4 +162,39 @@ test('a live sprite and speech follow a logical target while the editor remains 
     assert.equal(await speech.count(), 0);
     await page.evaluate(() => (window as any).fixture.attachment.dispose());
     assert.equal(await page.evaluate(() => (window as any).fixture.listenerCount), 0);
+});
+
+test('the next-lesson button navigates only on a real click and leaves with stop, project change and dispose', async t => {
+    const bundle = await build({entryPoints: ['test/browser-fixture.ts'], bundle: true, write: false,
+        platform: 'browser', target: 'es2017', define: {'process.env.NODE_ENV': '"production"'}});
+    const browser = await chromium.launch({headless: true}); t.after(() => browser.close());
+    const page = await browser.newPage({viewport: {width: 1000, height: 700}});
+    await page.route('https://editor.test/**', route => route.fulfill({contentType: 'text/html', body: html}));
+    await page.goto('https://editor.test/editor.html?locale=ja&twPlusLocalGit=1');
+    await page.addScriptTag({content: bundle.outputFiles[0]!.text});
+    assert.equal(await page.evaluate(() => (window as any).fixture.attachment.ready), true);
+    const link = page.getByRole('link', {name: '次の教材へ'});
+    const offer = () => page.evaluate(() => (window as any).fixture.extension.offerNext({
+        PROJECT: 'https://lessons.test/2.sb3', LABEL: '次の教材へ', FEATURES: 'twPlusWorkspaceMinimap'}));
+    for (const event of ['PROJECT_STOP_ALL', 'PROJECT_LOADED']) {
+        await offer();
+        await link.waitFor({state: 'visible'});
+        await page.evaluate(event => (window as any).fixture.emit(event), event);
+        assert.equal(await link.count(), 0);
+    }
+    await offer();
+    await page.evaluate(() => (window as any).fixture.attachment.dispose());
+    assert.equal(await link.count(), 0);
+    await page.evaluate(() => (window as any).fixture.reattach());
+    await offer();
+    await page.locator('a[data-tw-guide-next]').evaluate((element: HTMLElement) => element.dispatchEvent(new MouseEvent('mouseover')));
+    assert.equal(new URL(page.url()).searchParams.has('project_url'), false);
+    await link.click();
+    await page.waitForURL(url => url.searchParams.has('project_url'));
+    const next = new URL(page.url());
+    assert.equal(next.pathname, '/editor.html');
+    assert.equal(next.searchParams.get('project_url'), 'https://lessons.test/2.sb3');
+    assert.equal(next.searchParams.get('locale'), 'ja');
+    assert.equal(next.searchParams.get('twPlusLocalGit'), '1');
+    assert.equal(next.searchParams.get('twPlusWorkspaceMinimap'), '1');
 });
